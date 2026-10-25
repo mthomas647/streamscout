@@ -86,6 +86,7 @@ header.top{
 .pill{
   padding:7px 14px; border-radius:999px; border:1px solid var(--border);
   background:var(--glass); color:var(--fg-dim); font-size:13px; font-weight:500;
+  font-family:inherit; appearance:none; -webkit-appearance:none;
   cursor:pointer; white-space:nowrap; min-width:0;
 }
 .pill.active{background:var(--accent-soft); border-color:var(--accent); color:var(--fg)}
@@ -188,6 +189,9 @@ main{padding-bottom:48px}
     <p class="status-line" id="status"></p>
     <div class="grid" id="grid"></div>
     <div class="empty" id="emptyState" hidden></div>
+    <div style="text-align:center;margin-top:20px">
+      <button class="pill" id="loadMoreBtn" hidden style="padding:9px 20px">Load more</button>
+    </div>
     <div class="setup" id="setup" hidden>
       <h2>Connect your TMDB key</h2>
       <p>StreamScout pulls live Netflix, Prime Video and Hotstar availability in India from TMDB, the same catalog data JustWatch uses, free to query with your own key. The key stays in this browser only.</p>
@@ -235,7 +239,11 @@ main{padding-bottom:48px}
     services: new Set(["netflix","prime","hotstar"]),
     type: "both",
     tab: "discover",
-    lastResults: []
+    lastResults: [],
+    page: 1,
+    lastParsed: null,
+    lastTypes: null,
+    exhausted: false
   };
 
   var SERVICE_LABELS = [
@@ -265,6 +273,7 @@ main{padding-bottom:48px}
   var gridEl = document.getElementById("grid");
   var statusEl = document.getElementById("status");
   var emptyEl = document.getElementById("emptyState");
+  var loadMoreBtn = document.getElementById("loadMoreBtn");
   var setupEl = document.getElementById("setup");
   var apiKeyInput = document.getElementById("apiKeyInput");
   var saveKeyBtn = document.getElementById("saveKey");
@@ -396,7 +405,7 @@ main{padding-bottom:48px}
     };
   }
 
-  function discover(mediaType, parsed){
+  function discover(mediaType, parsed, page){
     var services = parsed.services || Array.from(state.services);
     var ids = providerIdsFor(services, mediaType);
     if(ids.length===0) return Promise.resolve([]);
@@ -410,10 +419,30 @@ main{padding-bottom:48px}
       with_genres: genreId || undefined,
       with_original_language: parsed.lang || undefined,
       language: "en-US",
-      page: 1
+      page: page || 1
     };
     return tmdbGet("/discover/" + mediaType, params).then(function(res){
       return (res.results||[]).map(function(it){ return normalize(it, mediaType); });
+    });
+  }
+
+  function sortCombined(list, sortKey){
+    var key = sortKey.split(".")[0];
+    list.sort(function(a,b){
+      if(key==="vote_average") return (b.rating||0) - (a.rating||0);
+      if(key==="primary_release_date") return (b.year||"0") > (a.year||"0") ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }
+
+  function dedupe(list){
+    var seen = {};
+    return list.filter(function(it){
+      var k = it.mediaType+":"+it.id;
+      if(seen[k]) return false;
+      seen[k] = true;
+      return true;
     });
   }
 
@@ -422,29 +451,30 @@ main{padding-bottom:48px}
     statusEl.textContent = "Searching...";
     gridEl.innerHTML = "";
     emptyEl.hidden = true;
+    loadMoreBtn.hidden = true;
 
     var parsed = parseQuery(text);
     var effectiveType = parsed.type || (state.type==="both" ? null : state.type);
     var types = effectiveType ? [effectiveType] : ["movie","tv"];
+    state.page = 1;
+    state.lastParsed = parsed;
+    state.lastTypes = types;
+    state.exhausted = false;
 
-    Promise.all(types.map(function(t){ return discover(t, parsed); }))
+    Promise.all(types.map(function(t){ return discover(t, parsed, 1); }))
       .then(function(lists){
-        var combined = [].concat.apply([], lists);
-        var key = parsed.sort.split(".")[0];
-        combined.sort(function(a,b){
-          if(key==="vote_average") return (b.rating||0) - (a.rating||0);
-          if(key==="primary_release_date") return (b.year||"0") > (a.year||"0") ? 1 : -1;
-          return 0;
-        });
-        state.lastResults = combined.slice(0, 40);
+        var combined = dedupe([].concat.apply([], lists));
+        sortCombined(combined, parsed.sort);
+        state.lastResults = combined;
         renderGrid(state.lastResults);
         var svcNames = (parsed.services||Array.from(state.services)).map(function(k){
           return SERVICE_LABELS.filter(function(s){return s.key===k})[0].label;
         }).join(", ");
         statusEl.textContent = state.lastResults.length
-          ? state.lastResults.length + " results on " + svcNames
+          ? state.lastResults.length + " results so far on " + svcNames
           : "Nothing matched on " + svcNames + " - try a broader search.";
-        if(!state.lastResults.length) emptyEl.hidden = false, emptyEl.textContent = "No titles matched that search. Try fewer filters or a different genre.";
+        if(!state.lastResults.length){ emptyEl.hidden = false; emptyEl.textContent = "No titles matched that search. Try fewer filters or a different genre."; }
+        loadMoreBtn.hidden = combined.length === 0;
       })
       .catch(function(e){
         statusEl.textContent = "";
@@ -452,6 +482,36 @@ main{padding-bottom:48px}
         emptyEl.textContent = (e && e.status===401)
           ? "Your TMDB key was rejected. Open Settings and check it."
           : "Something went wrong reaching TMDB. Try again in a moment.";
+      });
+  }
+
+  function loadMore(){
+    if(!state.lastParsed || state.exhausted) return;
+    loadMoreBtn.textContent = "Loading...";
+    state.page += 1;
+    var parsed = state.lastParsed;
+    Promise.all(state.lastTypes.map(function(t){ return discover(t, parsed, state.page); }))
+      .then(function(lists){
+        var fresh = [].concat.apply([], lists);
+        if(fresh.length === 0){
+          state.exhausted = true;
+          loadMoreBtn.hidden = true;
+          loadMoreBtn.textContent = "Load more";
+          return;
+        }
+        var combined = dedupe(state.lastResults.concat(fresh));
+        sortCombined(combined, parsed.sort);
+        state.lastResults = combined;
+        renderGrid(state.lastResults);
+        var svcNames = (parsed.services||Array.from(state.services)).map(function(k){
+          return SERVICE_LABELS.filter(function(s){return s.key===k})[0].label;
+        }).join(", ");
+        statusEl.textContent = state.lastResults.length + " results so far on " + svcNames;
+        loadMoreBtn.textContent = "Load more";
+      })
+      .catch(function(){
+        state.page -= 1;
+        loadMoreBtn.textContent = "Load more";
       });
   }
 
@@ -501,6 +561,7 @@ main{padding-bottom:48px}
 
   function renderWatchlist(){
     gridEl.innerHTML = "";
+    loadMoreBtn.hidden = true;
     statusEl.textContent = state.watchlist.length ? state.watchlist.length + " saved" : "";
     emptyEl.hidden = !!state.watchlist.length;
     if(!state.watchlist.length){
@@ -524,6 +585,17 @@ main{padding-bottom:48px}
   // ---------- search wiring ----------
   searchBtn.onclick = function(){ runSearch(qInput.value); };
   qInput.addEventListener("keydown", function(e){ if(e.key==="Enter") runSearch(qInput.value); });
+  loadMoreBtn.onclick = loadMore;
+
+  // ---------- infinite scroll ----------
+  if("IntersectionObserver" in window){
+    var scrollObserver = new IntersectionObserver(function(entries){
+      if(entries[0].isIntersecting && !loadMoreBtn.hidden && loadMoreBtn.textContent==="Load more"){
+        loadMore();
+      }
+    }, { rootMargin: "600px" });
+    scrollObserver.observe(loadMoreBtn);
+  }
 
   // ---------- voice ----------
   var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -543,7 +615,7 @@ main{padding-bottom:48px}
 
   // ---------- setup / settings ----------
   function showSetup(){
-    setupEl.hidden = false; gridEl.innerHTML = ""; statusEl.textContent = ""; emptyEl.hidden = true;
+    setupEl.hidden = false; gridEl.innerHTML = ""; statusEl.textContent = ""; emptyEl.hidden = true; loadMoreBtn.hidden = true;
     apiKeyInput.value = state.apiKey || "";
   }
   function hideSetup(){ setupEl.hidden = true; }
