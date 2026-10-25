@@ -1,0 +1,580 @@
+<title>StreamScout</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: sticky glass search header over a responsive poster grid; service pills are live filters, not labels */
+:root{
+  --bg:#0b0b10; --bg-2:#111117;
+  --glass:rgba(255,255,255,.06); --glass-strong:rgba(255,255,255,.10);
+  --border:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.22);
+  --fg:#ece9e2; --fg-dim:rgba(236,233,226,.62); --fg-faint:rgba(236,233,226,.38);
+  --accent:#9b8cff; --accent-ink:#1c1733; --accent-soft:rgba(155,140,255,.16);
+  --gold:#e8b949;
+  --danger:#e87a6a;
+  --font-display:'Sora',sans-serif; --font-body:'Inter',sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f5f4ef; --bg-2:#ffffff;
+    --glass:rgba(20,18,12,.04); --glass-strong:rgba(20,18,12,.07);
+    --border:rgba(20,18,12,.12); --border-strong:rgba(20,18,12,.22);
+    --fg:#1c1b17; --fg-dim:rgba(28,27,23,.64); --fg-faint:rgba(28,27,23,.40);
+    --accent:#6a56e8; --accent-ink:#f1eeff; --accent-soft:rgba(106,86,232,.12);
+    --gold:#b4812a; --danger:#c23f2d;
+    color-scheme:light;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b0b10; --bg-2:#111117;
+  --glass:rgba(255,255,255,.06); --glass-strong:rgba(255,255,255,.10);
+  --border:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.22);
+  --fg:#ece9e2; --fg-dim:rgba(236,233,226,.62); --fg-faint:rgba(236,233,226,.38);
+  --accent:#9b8cff; --accent-ink:#1c1733; --accent-soft:rgba(155,140,255,.16);
+  --gold:#e8b949; --danger:#e87a6a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--font-body);
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;margin:0}
+p{margin:0}
+.wrap{max-width:1100px;margin:0 auto}
+
+header.top{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:5;
+  background:linear-gradient(var(--bg) 70%, transparent);
+  padding-block:18px 10px;
+}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.brand h1{font-size:19px;letter-spacing:.2px}
+
+.searchbar{
+  display:flex; align-items:center; gap:8px;
+  background:var(--glass); border:1px solid var(--border); border-radius:16px;
+  padding:4px 4px 4px 16px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+}
+.searchbar input{
+  flex:1; min-width:0; border:none; background:none; outline:none; color:var(--fg);
+  font-family:var(--font-body); font-size:15px; padding:12px 0;
+}
+.searchbar input::placeholder{color:var(--fg-faint)}
+.icon-btn{
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width:40px; height:40px; border-radius:12px; border:1px solid transparent;
+  background:transparent; color:var(--fg-dim); cursor:pointer;
+}
+.icon-btn:hover{background:var(--glass-strong); color:var(--fg)}
+.icon-btn.go{background:var(--accent); color:var(--accent-ink)}
+.icon-btn.go:hover{opacity:.9; background:var(--accent)}
+.icon-btn.listening{color:var(--danger)}
+.icon-btn svg{width:18px;height:18px}
+
+.filters{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.pill{
+  padding:7px 14px; border-radius:999px; border:1px solid var(--border);
+  background:var(--glass); color:var(--fg-dim); font-size:13px; font-weight:500;
+  cursor:pointer; white-space:nowrap; min-width:0;
+}
+.pill.active{background:var(--accent-soft); border-color:var(--accent); color:var(--fg)}
+.pill-sep{width:1px; background:var(--border); margin:4px 2px}
+
+.tabs{display:flex; gap:4px; margin:16px 0 14px; border-bottom:1px solid var(--border)}
+.tab{padding:9px 4px; margin-right:18px; font-size:14px; font-weight:500; color:var(--fg-faint); cursor:pointer; border-bottom:2px solid transparent}
+.tab.active{color:var(--fg); border-bottom-color:var(--accent)}
+
+main{padding-bottom:48px}
+.status-line{color:var(--fg-dim); font-size:13px; margin:2px 0 16px}
+
+.grid{
+  display:grid; gap:16px;
+  grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+}
+.card{
+  position:relative; border-radius:14px; overflow:hidden;
+  background:var(--glass); border:1px solid var(--border);
+}
+.card .poster-wrap{position:relative; aspect-ratio:2/3; background:var(--bg-2)}
+.card img{width:100%; height:100%; object-fit:cover; display:block}
+.card .noposter{
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:10px; font-size:12px; color:var(--fg-faint);
+}
+.badge{
+  position:absolute; top:8px; left:8px; display:flex; align-items:center; gap:3px;
+  background:rgba(10,10,10,.6); backdrop-filter:blur(6px); color:#fff;
+  padding:3px 7px; border-radius:999px; font-size:11px; font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.badge svg{width:11px;height:11px; fill:var(--gold)}
+.save-btn{
+  position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:50%;
+  background:rgba(10,10,10,.6); backdrop-filter:blur(6px); border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+}
+.save-btn svg{width:15px;height:15px; fill:none; stroke:#fff; stroke-width:2}
+.save-btn.saved svg{fill:var(--accent); stroke:var(--accent)}
+.card .meta{padding:9px 10px 11px}
+.card .title{font-size:13px; font-weight:600; line-height:1.3; margin-bottom:2px}
+.card .sub{font-size:11.5px; color:var(--fg-dim)}
+
+.empty, .setup{
+  margin-top:10px; padding:28px 22px; border-radius:18px;
+  background:var(--glass); border:1px solid var(--border); text-align:center;
+}
+.setup{max-width:440px; margin-inline:auto; margin-top:40px; text-align:left}
+.setup h2{font-size:18px; margin-bottom:8px}
+.setup p{color:var(--fg-dim); font-size:13.5px; line-height:1.6; margin-bottom:14px}
+.setup ol{color:var(--fg-dim); font-size:13.5px; line-height:1.9; margin:0 0 16px; padding-left:20px}
+.setup a{color:var(--accent)}
+.setup .keyrow{display:flex; gap:8px}
+.setup input[type=text]{
+  flex:1; min-width:0; background:var(--bg-2); border:1px solid var(--border); border-radius:10px;
+  padding:10px 12px; color:var(--fg); font-family:var(--font-body); font-size:13.5px; outline:none;
+}
+.setup input[type=text]:focus{border-color:var(--accent)}
+.setup button.save{
+  background:var(--accent); color:var(--accent-ink); border:none; border-radius:10px;
+  padding:0 16px; font-weight:600; font-size:13.5px; cursor:pointer;
+}
+.err{color:var(--danger); font-size:12.5px; margin-top:8px; display:none}
+
+.gear{position:fixed; bottom:max(16px, env(safe-area-inset-bottom,0px)); right:max(16px, env(safe-area-inset-right,0px)); z-index:6}
+.gear button{
+  width:42px; height:42px; border-radius:50%; background:var(--glass-strong); border:1px solid var(--border);
+  backdrop-filter:blur(12px); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--fg-dim);
+}
+.gear button svg{width:18px;height:18px}
+
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: no-preference){
+  .card{transition:transform .15s ease}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot" aria-hidden="true"></span><h1>StreamScout</h1></div>
+    <div class="searchbar">
+      <input id="q" type="text" placeholder="Show me top rated thriller movies in English" autocomplete="off">
+      <button class="icon-btn" id="micBtn" hidden aria-label="Search by voice" title="Search by voice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/></svg>
+      </button>
+      <button class="icon-btn go" id="searchBtn" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+    </div>
+    <div class="filters" id="servicePills"></div>
+    <div class="filters" id="typePills" style="margin-top:6px"></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="discover">Discover</div>
+      <div class="tab" data-tab="watchlist">Watchlist</div>
+    </div>
+  </header>
+
+  <main>
+    <p class="status-line" id="status"></p>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="emptyState" hidden></div>
+    <div class="setup" id="setup" hidden>
+      <h2>Connect your TMDB key</h2>
+      <p>StreamScout pulls live Netflix, Prime Video and Hotstar availability in India from TMDB, the same catalog data JustWatch uses, free to query with your own key. The key stays in this browser only.</p>
+      <ol>
+        <li>Create a free account at <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a></li>
+        <li>Go to Settings, then API, and request a key as a Developer</li>
+        <li>Paste either the "API Key" or the "API Read Access Token" below - both work</li>
+      </ol>
+      <div class="keyrow">
+        <input type="text" id="apiKeyInput" placeholder="Paste your TMDB API key">
+        <button class="save" id="saveKey">Connect</button>
+      </div>
+      <p class="err" id="keyErr">That key didn't work. Double check it and try again.</p>
+    </div>
+  </main>
+</div>
+
+<div class="gear"><button id="gearBtn" aria-label="Settings" title="Settings">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+</button></div>
+
+<script>
+(function(){
+  "use strict";
+  var TMDB = "https://api.themoviedb.org/3";
+  var IMG = "https://image.tmdb.org/t/p/w342";
+  var REGION = "IN";
+
+  var LS_KEY = "streamscout_key";
+  var LS_WATCHLIST = "streamscout_watchlist";
+
+  function readLS(k, fallback){
+    try{ var v = localStorage.getItem(k); return v==null ? fallback : JSON.parse(v); }
+    catch(e){ return fallback; }
+  }
+  function writeLS(k, v){
+    try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
+  }
+
+  var state = {
+    apiKey: readLS(LS_KEY, ""),
+    watchlist: readLS(LS_WATCHLIST, []),
+    providers: { movie: [], tv: [] },
+    genres: { movie: {}, tv: {} },
+    services: new Set(["netflix","prime","hotstar"]),
+    type: "both",
+    tab: "discover",
+    lastResults: []
+  };
+
+  var SERVICE_LABELS = [
+    { key:"netflix", label:"Netflix", match:["netflix"] },
+    { key:"prime", label:"Prime Video", match:["prime video","amazon prime video","amazon video"] },
+    { key:"hotstar", label:"Hotstar", match:["hotstar"] }
+  ];
+  var TYPE_LABELS = [
+    { key:"both", label:"All" },
+    { key:"movie", label:"Movies" },
+    { key:"tv", label:"Shows" }
+  ];
+
+  var LANG_MAP = {
+    english:"en", hindi:"hi", tamil:"ta", telugu:"te", malayalam:"ml", kannada:"kn",
+    bengali:"bn", punjabi:"pa", marathi:"mr", korean:"ko", japanese:"ja", spanish:"es",
+    french:"fr", german:"de", italian:"it", mandarin:"zh", chinese:"zh", turkish:"tr"
+  };
+
+  // ---------- DOM refs ----------
+  var qInput = document.getElementById("q");
+  var searchBtn = document.getElementById("searchBtn");
+  var micBtn = document.getElementById("micBtn");
+  var servicePillsEl = document.getElementById("servicePills");
+  var typePillsEl = document.getElementById("typePills");
+  var tabsEl = document.querySelectorAll(".tab");
+  var gridEl = document.getElementById("grid");
+  var statusEl = document.getElementById("status");
+  var emptyEl = document.getElementById("emptyState");
+  var setupEl = document.getElementById("setup");
+  var apiKeyInput = document.getElementById("apiKeyInput");
+  var saveKeyBtn = document.getElementById("saveKey");
+  var keyErr = document.getElementById("keyErr");
+  var gearBtn = document.getElementById("gearBtn");
+
+  // ---------- pills ----------
+  function renderPills(){
+    servicePillsEl.innerHTML = "";
+    SERVICE_LABELS.forEach(function(s){
+      var b = document.createElement("div");
+      b.className = "pill" + (state.services.has(s.key) ? " active" : "");
+      b.textContent = s.label;
+      b.onclick = function(){
+        if(state.services.has(s.key) && state.services.size===1) return; // keep at least one
+        if(state.services.has(s.key)) state.services.delete(s.key); else state.services.add(s.key);
+        renderPills();
+        runSearch(qInput.value || "popular right now");
+      };
+      servicePillsEl.appendChild(b);
+    });
+
+    typePillsEl.innerHTML = "";
+    TYPE_LABELS.forEach(function(t){
+      var b = document.createElement("div");
+      b.className = "pill" + (state.type===t.key ? " active" : "");
+      b.textContent = t.label;
+      b.onclick = function(){
+        state.type = t.key;
+        renderPills();
+        runSearch(qInput.value || "popular right now");
+      };
+      typePillsEl.appendChild(b);
+    });
+  }
+
+  // ---------- TMDB fetch helpers ----------
+  function isV3Key(k){ return /^[a-f0-9]{32}$/i.test(k); }
+
+  function tmdbGet(path, params){
+    var url = new URL(TMDB + path);
+    var opts = {};
+    if(isV3Key(state.apiKey)){
+      url.searchParams.set("api_key", state.apiKey);
+    } else {
+      opts.headers = { "Authorization": "Bearer " + state.apiKey };
+    }
+    Object.keys(params||{}).forEach(function(k){
+      if(params[k]!==undefined && params[k]!==null && params[k]!=="") url.searchParams.set(k, params[k]);
+    });
+    return fetch(url.toString(), opts).then(function(r){
+      if(!r.ok) return r.json().then(function(j){ throw { status:r.status, body:j }; });
+      return r.json();
+    });
+  }
+
+  function loadProvidersAndGenres(){
+    return Promise.all([
+      tmdbGet("/watch/providers/movie", { watch_region: REGION }),
+      tmdbGet("/watch/providers/tv", { watch_region: REGION }),
+      tmdbGet("/genre/movie/list", { language:"en-US" }),
+      tmdbGet("/genre/tv/list", { language:"en-US" })
+    ]).then(function(res){
+      state.providers.movie = res[0].results || [];
+      state.providers.tv = res[1].results || [];
+      (res[2].genres||[]).forEach(function(g){ state.genres.movie[g.name.toLowerCase()] = g.id; });
+      (res[3].genres||[]).forEach(function(g){ state.genres.tv[g.name.toLowerCase()] = g.id; });
+    });
+  }
+
+  function providerIdsFor(serviceKeys, mediaType){
+    var list = state.providers[mediaType] || [];
+    var cfg = SERVICE_LABELS.filter(function(s){ return serviceKeys.has ? serviceKeys.has(s.key) : serviceKeys.indexOf(s.key)>=0; });
+    var ids = [];
+    list.forEach(function(p){
+      var name = (p.provider_name||"").toLowerCase();
+      cfg.forEach(function(s){
+        if(s.match.some(function(m){ return name.indexOf(m)>=0; })){
+          if(ids.indexOf(p.provider_id) === -1) ids.push(p.provider_id);
+        }
+      });
+    });
+    return ids;
+  }
+
+  // ---------- natural language parsing ----------
+  function parseQuery(text){
+    var q = (text||"").toLowerCase();
+    var result = { type:null, services:null, genreMovie:null, genreTv:null, lang:null, sort:"popularity.desc", minVotes:0 };
+
+    if(/\bmovies?\b/.test(q)) result.type = "movie";
+    else if(/\b(shows?|series|tv)\b/.test(q)) result.type = "tv";
+
+    var matchedServices = [];
+    SERVICE_LABELS.forEach(function(s){
+      if(s.match.some(function(m){ return q.indexOf(m)>=0; })) matchedServices.push(s.key);
+    });
+    if(matchedServices.length) result.services = matchedServices;
+
+    Object.keys(LANG_MAP).forEach(function(name){
+      if(q.indexOf(name) >= 0) result.lang = LANG_MAP[name];
+    });
+
+    Object.keys(state.genres.movie).forEach(function(name){
+      if(name.length>2 && (q.indexOf(name)>=0 || q.indexOf(name+"s")>=0)) result.genreMovie = state.genres.movie[name];
+    });
+    Object.keys(state.genres.tv).forEach(function(name){
+      if(name.length>2 && (q.indexOf(name)>=0 || q.indexOf(name+"s")>=0)) result.genreTv = state.genres.tv[name];
+    });
+
+    if(/top rated|highest rated|best rated|most acclaimed|critically acclaimed|highly rated/.test(q)){
+      result.sort = "vote_average.desc"; result.minVotes = 100;
+    } else if(/newest|latest|just released|recently released|new on/.test(q)){
+      result.sort = "primary_release_date.desc";
+    } else if(/popular|trending|most watched/.test(q)){
+      result.sort = "popularity.desc";
+    }
+    return result;
+  }
+
+  // ---------- search ----------
+  function normalize(item, mediaType){
+    return {
+      id: item.id, mediaType: mediaType,
+      title: mediaType==="movie" ? item.title : item.name,
+      year: (mediaType==="movie" ? item.release_date : item.first_air_date || "").slice(0,4),
+      poster: item.poster_path ? (IMG + item.poster_path) : null,
+      rating: item.vote_average ? Math.round(item.vote_average*10)/10 : null
+    };
+  }
+
+  function discover(mediaType, parsed){
+    var services = parsed.services || Array.from(state.services);
+    var ids = providerIdsFor(services, mediaType);
+    if(ids.length===0) return Promise.resolve([]);
+    var genreId = mediaType==="movie" ? parsed.genreMovie : parsed.genreTv;
+    var params = {
+      sort_by: parsed.sort,
+      watch_region: REGION,
+      with_watch_providers: ids.join("|"),
+      with_watch_monetization_types: "flatrate",
+      "vote_count.gte": parsed.minVotes,
+      with_genres: genreId || undefined,
+      with_original_language: parsed.lang || undefined,
+      language: "en-US",
+      page: 1
+    };
+    return tmdbGet("/discover/" + mediaType, params).then(function(res){
+      return (res.results||[]).map(function(it){ return normalize(it, mediaType); });
+    });
+  }
+
+  function runSearch(text){
+    if(!state.apiKey){ showSetup(); return; }
+    statusEl.textContent = "Searching...";
+    gridEl.innerHTML = "";
+    emptyEl.hidden = true;
+
+    var parsed = parseQuery(text);
+    var effectiveType = parsed.type || (state.type==="both" ? null : state.type);
+    var types = effectiveType ? [effectiveType] : ["movie","tv"];
+
+    Promise.all(types.map(function(t){ return discover(t, parsed); }))
+      .then(function(lists){
+        var combined = [].concat.apply([], lists);
+        var key = parsed.sort.split(".")[0];
+        combined.sort(function(a,b){
+          if(key==="vote_average") return (b.rating||0) - (a.rating||0);
+          if(key==="primary_release_date") return (b.year||"0") > (a.year||"0") ? 1 : -1;
+          return 0;
+        });
+        state.lastResults = combined.slice(0, 40);
+        renderGrid(state.lastResults);
+        var svcNames = (parsed.services||Array.from(state.services)).map(function(k){
+          return SERVICE_LABELS.filter(function(s){return s.key===k})[0].label;
+        }).join(", ");
+        statusEl.textContent = state.lastResults.length
+          ? state.lastResults.length + " results on " + svcNames
+          : "Nothing matched on " + svcNames + " - try a broader search.";
+        if(!state.lastResults.length) emptyEl.hidden = false, emptyEl.textContent = "No titles matched that search. Try fewer filters or a different genre.";
+      })
+      .catch(function(e){
+        statusEl.textContent = "";
+        emptyEl.hidden = false;
+        emptyEl.textContent = (e && e.status===401)
+          ? "Your TMDB key was rejected. Open Settings and check it."
+          : "Something went wrong reaching TMDB. Try again in a moment.";
+      });
+  }
+
+  function isSaved(id, mediaType){
+    return state.watchlist.some(function(w){ return w.id===id && w.mediaType===mediaType; });
+  }
+  function toggleSave(item){
+    var idx = state.watchlist.findIndex(function(w){ return w.id===item.id && w.mediaType===item.mediaType; });
+    if(idx>=0) state.watchlist.splice(idx,1); else state.watchlist.unshift(item);
+    writeLS(LS_WATCHLIST, state.watchlist);
+  }
+
+  function cardHTML(item){
+    var poster = item.poster
+      ? '<img src="'+item.poster+'" alt="" loading="lazy">'
+      : '<div class="noposter">'+escapeHTML(item.title)+'</div>';
+    var ratingBadge = item.rating
+      ? '<div class="badge"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6z"/></svg>'+item.rating+'</div>'
+      : "";
+    return '<div class="card" data-id="'+item.id+'" data-media="'+item.mediaType+'">'
+      + '<div class="poster-wrap">' + poster + ratingBadge
+      + '<button class="save-btn'+(isSaved(item.id,item.mediaType)?" saved":"")+'" aria-label="Save to watchlist">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.1C.4 8.4 2 5 5.4 5 7.7 5 9.6 6.3 12 9c2.4-2.7 4.3-4 6.6-4C22 5 23.6 8.4 22 11.9 19.5 16.4 12 21 12 21Z"/></svg></button>'
+      + '</div>'
+      + '<div class="meta"><div class="title">'+escapeHTML(item.title)+'</div>'
+      + '<div class="sub">'+(item.year||"")+' - '+(item.mediaType==="movie"?"Movie":"Show")+'</div></div>'
+      + '</div>';
+  }
+
+  function escapeHTML(s){
+    return (s||"").replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderGrid(items){
+    gridEl.innerHTML = items.map(cardHTML).join("");
+    gridEl.querySelectorAll(".save-btn").forEach(function(btn, i){
+      btn.onclick = function(ev){
+        ev.stopPropagation();
+        var item = items[i];
+        toggleSave(item);
+        btn.classList.toggle("saved");
+      };
+    });
+  }
+
+  function renderWatchlist(){
+    gridEl.innerHTML = "";
+    statusEl.textContent = state.watchlist.length ? state.watchlist.length + " saved" : "";
+    emptyEl.hidden = !!state.watchlist.length;
+    if(!state.watchlist.length){
+      emptyEl.textContent = "Nothing saved yet. Tap the heart on any title in Discover.";
+      return;
+    }
+    renderGrid(state.watchlist);
+  }
+
+  // ---------- tabs ----------
+  tabsEl.forEach(function(tab){
+    tab.onclick = function(){
+      tabsEl.forEach(function(t){ t.classList.remove("active"); });
+      tab.classList.add("active");
+      state.tab = tab.getAttribute("data-tab");
+      if(state.tab==="watchlist") renderWatchlist();
+      else runSearch(qInput.value || "popular right now");
+    };
+  });
+
+  // ---------- search wiring ----------
+  searchBtn.onclick = function(){ runSearch(qInput.value); };
+  qInput.addEventListener("keydown", function(e){ if(e.key==="Enter") runSearch(qInput.value); });
+
+  // ---------- voice ----------
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(SpeechRec){
+    micBtn.hidden = false;
+    var recognizing = false;
+    var rec = new SpeechRec();
+    rec.lang = "en-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onresult = function(e){ qInput.value = e.results[0][0].transcript; runSearch(qInput.value); };
+    rec.onend = function(){ recognizing = false; micBtn.classList.remove("listening"); };
+    micBtn.onclick = function(){
+      if(recognizing){ rec.stop(); return; }
+      recognizing = true; micBtn.classList.add("listening");
+      try{ rec.start(); }catch(e){ recognizing=false; micBtn.classList.remove("listening"); }
+    };
+  }
+
+  // ---------- setup / settings ----------
+  function showSetup(){
+    setupEl.hidden = false; gridEl.innerHTML = ""; statusEl.textContent = ""; emptyEl.hidden = true;
+    apiKeyInput.value = state.apiKey || "";
+  }
+  function hideSetup(){ setupEl.hidden = true; }
+
+  saveKeyBtn.onclick = function(){
+    var key = apiKeyInput.value.trim();
+    if(!key) return;
+    keyErr.style.display = "none";
+    state.apiKey = key;
+    tmdbGet("/configuration", {}).then(function(){
+      writeLS(LS_KEY, key);
+      hideSetup();
+      boot(true);
+    }).catch(function(e){
+      keyErr.textContent = (e && e.status===401)
+        ? "TMDB rejected that key. Double check you copied the whole thing, with no extra spaces."
+        : "Couldn't reach TMDB to check the key. Check your connection and try again.";
+      keyErr.style.display = "block";
+    });
+  };
+  gearBtn.onclick = function(){ setupEl.hidden ? showSetup() : hideSetup(); };
+
+  // ---------- boot ----------
+  function boot(afterKeySave){
+    renderPills();
+    if(!state.apiKey){ showSetup(); return; }
+    hideSetup();
+    statusEl.textContent = "Loading catalog...";
+    loadProvidersAndGenres().then(function(){
+      renderPills();
+      runSearch("popular right now");
+    }).catch(function(){
+      statusEl.textContent = "";
+      emptyEl.hidden = false;
+      emptyEl.textContent = "Couldn't reach TMDB. Check your key in Settings or try again shortly.";
+    });
+  }
+
+  boot(false);
+})();
+</script>
